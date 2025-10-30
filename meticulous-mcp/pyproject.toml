@@ -1,0 +1,45 @@
+[project]
+name = "meticulous-mcp"
+version = "0.1.0"
+description = "MCP server for managing Meticulous espresso machine profiles"
+authors = [{ name = "Meticulous MCP" }]
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.11"
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+]
+dependencies = [
+    "requests>=2.32.3",
+    "pydantic>=2.7.3",
+    "python-socketio>=5.11.2",
+    "websocket-client>=1.8.0",
+    "jsonschema>=4.20.0",
+    "anyio>=4.5",
+    "httpx>=0.27.1",
+    "httpx-sse>=0.4",
+    "starlette>=0.27",
+    "python-multipart>=0.0.9",
+    "sse-starlette>=1.6.1",
+    "pydantic-settings>=2.5.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.2",
+    "pytest-mock>=3.14.0",
+]
+
+[project.scripts]
+meticulous-mcp = "meticulous_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+

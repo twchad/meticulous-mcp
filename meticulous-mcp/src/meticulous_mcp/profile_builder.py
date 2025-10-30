@@ -1,0 +1,221 @@
+"""Profile builder helpers for creating espresso profiles.
+
+Copyright (C) 2024 Meticulous MCP
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+import uuid
+from typing import Any, Dict, List, Optional, Union
+
+from meticulous.profile import (
+    Profile,
+    Stage,
+    Dynamics,
+    ExitTrigger,
+    Limit,
+    Variable,
+    Display,
+    PreviousAuthor,
+)
+
+
+def create_variable(
+    name: str,
+    key: str,
+    var_type: str,
+    value: float,
+) -> Variable:
+    """Create a profile variable.
+    
+    Args:
+        name: Variable name
+        key: Variable key (used for references)
+        var_type: Type: "power", "flow", "pressure", "weight", "time", "piston_position"
+        value: Variable value
+        
+    Returns:
+        Variable object
+    """
+    return Variable(name=name, key=key, type=var_type, value=value)
+
+
+def create_exit_trigger(
+    trigger_type: str,
+    value: Union[float, str],
+    relative: Optional[bool] = None,
+    comparison: Optional[str] = None,
+) -> ExitTrigger:
+    """Create an exit trigger.
+    
+    Args:
+        trigger_type: Type: "weight", "pressure", "flow", "time", "piston_position", "power", "user_interaction"
+        value: Trigger value (number or variable reference like "$pressure_1")
+        relative: Whether the value is relative
+        comparison: Comparison operator: ">=" or "<="
+        
+    Returns:
+        ExitTrigger object
+    """
+    return ExitTrigger(
+        type=trigger_type,
+        value=value,
+        relative=relative,
+        comparison=comparison,
+    )
+
+
+def create_limit(
+    limit_type: str,
+    value: Union[float, str],
+) -> Limit:
+    """Create a limit.
+    
+    Args:
+        limit_type: Type: "pressure" or "flow"
+        value: Limit value (number or variable reference like "$pressure_1")
+        
+    Returns:
+        Limit object
+    """
+    return Limit(type=limit_type, value=value)
+
+
+def create_dynamics(
+    points: List[List[Union[float, str]]],
+    over: str,
+    interpolation: str = "linear",
+) -> Dynamics:
+    """Create dynamics configuration.
+    
+    Args:
+        points: List of [x, y] points where values can be numbers or variable references
+        over: What to interpolate over: "piston_position", "time", or "weight"
+        interpolation: Interpolation method: "none", "linear", or "curve"
+        
+    Returns:
+        Dynamics object
+    """
+    return Dynamics(points=points, over=over, interpolation=interpolation)
+
+
+def create_stage(
+    name: str,
+    key: str,
+    stage_type: str,
+    dynamics: Dynamics,
+    exit_triggers: List[ExitTrigger],
+    limits: Optional[List[Limit]] = None,
+) -> Stage:
+    """Create a stage.
+    
+    Args:
+        name: Stage name
+        key: Stage key
+        stage_type: Type: "power", "flow", or "pressure"
+        dynamics: Dynamics configuration
+        exit_triggers: List of exit triggers
+        limits: Optional list of limits
+        
+    Returns:
+        Stage object
+    """
+    return Stage(
+        name=name,
+        key=key,
+        type=stage_type,
+        dynamics=dynamics,
+        exit_triggers=exit_triggers,
+        limits=limits,
+    )
+
+
+def create_profile(
+    name: str,
+    author: str,
+    author_id: Optional[str] = None,
+    temperature: float = 90.0,
+    final_weight: float = 40.0,
+    stages: Optional[List[Stage]] = None,
+    variables: Optional[List[Variable]] = None,
+    display: Optional[Display] = None,
+    previous_authors: Optional[List[PreviousAuthor]] = None,
+    profile_id: Optional[str] = None,
+    last_changed: Optional[float] = None,
+) -> Profile:
+    """Create a complete profile.
+    
+    Args:
+        name: Profile name
+        author: Author name
+        author_id: Author ID (UUID). If not provided, generates a new UUID.
+        temperature: Brew temperature in Celsius
+        final_weight: Target final weight in grams
+        stages: List of stages. If not provided, creates empty list.
+        variables: Optional list of variables
+        display: Optional display configuration
+        previous_authors: Optional list of previous authors
+        profile_id: Profile ID (UUID). If not provided, generates a new UUID.
+        last_changed: Optional timestamp of last change
+        
+    Returns:
+        Profile object
+    """
+    if profile_id is None:
+        profile_id = str(uuid.uuid4())
+    
+    if author_id is None:
+        author_id = str(uuid.uuid4())
+    
+    if stages is None:
+        stages = []
+    
+    return Profile(
+        name=name,
+        id=profile_id,
+        author=author,
+        author_id=author_id,
+        temperature=temperature,
+        final_weight=final_weight,
+        stages=stages,
+        variables=variables,
+        display=display,
+        previous_authors=previous_authors,
+        last_changed=last_changed,
+    )
+
+
+def profile_to_dict(profile: Profile) -> Dict[str, Any]:
+    """Convert a Profile object to a dictionary.
+    
+    Args:
+        profile: Profile object
+        
+    Returns:
+        Dictionary representation of the profile
+    """
+    return profile.model_dump(exclude_none=True)
+
+
+def dict_to_profile(data: Dict[str, Any]) -> Profile:
+    """Create a Profile object from a dictionary.
+    
+    Args:
+        data: Dictionary containing profile data
+        
+    Returns:
+        Profile object
+    """
+    return Profile(**data)
+

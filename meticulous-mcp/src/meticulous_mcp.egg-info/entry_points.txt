@@ -1,0 +1,2 @@
+[console_scripts]
+meticulous-mcp = meticulous_mcp.server:main
