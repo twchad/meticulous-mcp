@@ -270,7 +270,7 @@ def test_create_espresso_profile_with_roast_level_dark():
     messages = create_espresso_profile(roast_level="dark")
     content = messages[1]["content"]["text"]
     assert "dark" in content.lower()
-    assert "lower temperature" in content.lower() or "88-92" in content
+    assert "lower temperature" in content.lower() or "82-90" in content
 
 
 def test_create_espresso_profile_with_coffee_age():

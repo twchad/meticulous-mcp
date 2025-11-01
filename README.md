@@ -169,6 +169,157 @@ Once connected, you can ask your AI assistant to:
 - **Validate profiles** - "Check if this profile JSON is valid"
 - **Run profiles** - "Execute profile X on the machine"
 
+## Example Agent Conversation
+
+Here's a realistic example of how an AI agent would interact with your Meticulous machine to create a new espresso profile:
+
+**User:** "I'd like to create a turbo shot profile for my light roast Ethiopian coffee. I want a bright, clear shot with good acidity."
+
+**Agent:** "I'll create a turbo shot profile optimized for light roast coffee. This profile will use higher temperature and a 1:3 ratio for brightness and clarity."
+
+**Agent calls:** `create_profile` with the following parameters:
+
+```json
+{
+  "name": "Turbo Light Roast v1",
+  "author": "AI Assistant",
+  "temperature": 94.0,
+  "final_weight": 54.0,
+  "stages": [
+    {
+      "name": "Preinfusion",
+      "key": "preinfusion",
+      "type": "flow",
+      "dynamics_points": [[0, 6]],
+      "dynamics_over": "time",
+      "dynamics_interpolation": "linear",
+      "exit_triggers": [
+        {"type": "pressure", "value": 1.5, "comparison": ">="},
+        {"type": "time", "value": 20, "comparison": ">="}
+      ]
+    },
+    {
+      "name": "Infusion",
+      "key": "infusion",
+      "type": "pressure",
+      "dynamics_points": [[0, 6.0], [3, 6.0]],
+      "dynamics_over": "time",
+      "dynamics_interpolation": "linear",
+      "exit_triggers": [
+        {"type": "time", "value": 15, "comparison": ">="},
+        {"type": "weight", "value": 35, "comparison": ">="}
+      ],
+      "limits": [{"type": "flow", "value": 8}]
+    },
+    {
+      "name": "Decline",
+      "key": "decline",
+      "type": "pressure",
+      "dynamics_points": [[0, 6.0], [10, 3.0]],
+      "dynamics_over": "time",
+      "dynamics_interpolation": "linear",
+      "exit_triggers": [
+        {"type": "weight", "value": 54, "comparison": ">="},
+        {"type": "time", "value": 30, "comparison": ">="}
+      ]
+    }
+  ]
+}
+```
+
+**Response from Meticulous Machine:**
+
+```json
+{
+  "profile_id": "d188ba5f-4939-489a-9c0e-38fb879c9fdd",
+  "profile_name": "Turbo Light Roast v1",
+  "message": "Profile 'Turbo Light Roast v1' created successfully"
+}
+```
+
+**Final Profile JSON Sent to Meticulous Machine:**
+
+```json
+{
+  "name": "Turbo Light Roast v1",
+  "id": "d188ba5f-4939-489a-9c0e-38fb879c9fdd",
+  "author": "AI Assistant",
+  "author_id": "f2d7b244-b2cd-4f9d-ae27-baee5f9ebaa8",
+  "display": {
+    "image": "/api/v1/profile/image/f9e16abcc19c1a34deaa9c2ac3bc7653.png",
+    "accentColor": "#5098C8"
+  },
+  "temperature": 94.0,
+  "final_weight": 54.0,
+  "stages": [
+    {
+      "name": "Preinfusion",
+      "key": "preinfusion",
+      "type": "flow",
+      "dynamics": {
+        "points": [[0.0, 6.0]],
+        "over": "time",
+        "interpolation": "linear"
+      },
+      "exit_triggers": [
+        {"type": "pressure", "value": 1.5, "relative": false, "comparison": ">="},
+        {"type": "time", "value": 20.0, "relative": false, "comparison": ">="}
+      ],
+      "limits": []
+    },
+    {
+      "name": "Infusion",
+      "key": "infusion",
+      "type": "pressure",
+      "dynamics": {
+        "points": [[0.0, 6.0], [3.0, 6.0]],
+        "over": "time",
+        "interpolation": "linear"
+      },
+      "exit_triggers": [
+        {"type": "time", "value": 15.0, "relative": false, "comparison": ">="},
+        {"type": "weight", "value": 35.0, "relative": false, "comparison": ">="}
+      ],
+      "limits": [{"type": "flow", "value": 8.0}]
+    },
+    {
+      "name": "Decline",
+      "key": "decline",
+      "type": "pressure",
+      "dynamics": {
+        "points": [[0.0, 6.0], [10.0, 3.0]],
+        "over": "time",
+        "interpolation": "linear"
+      },
+      "exit_triggers": [
+        {"type": "weight", "value": 54.0, "relative": false, "comparison": ">="},
+        {"type": "time", "value": 30.0, "relative": false, "comparison": ">="}
+      ],
+      "limits": []
+    }
+  ]
+}
+```
+
+**Agent:** "I've created a turbo shot profile called 'Turbo Light Roast v1' for your Ethiopian coffee. Here's what it does:
+
+- **Temperature:** 94°C (ideal for light roasts to extract sweetness)
+- **Pre-infusion:** Fast flow at 6 ml/s until pressure reaches 1.5 bar
+- **Infusion:** Holds 6 bar pressure for quick extraction (exits at 35g or 15 seconds)
+- **Decline:** Gradually reduces pressure from 6 to 3 bar for a smooth finish
+- **Final yield:** 54g (1:3 ratio for bright, tea-like clarity)
+
+The profile is now saved on your Meticulous machine and ready to use!"
+
+### What This Example Shows
+
+1. **Natural Language Input:** The user describes what they want in plain English
+2. **Agent Intelligence:** The AI understands the request and applies espresso profiling knowledge
+3. **Structured API Calls:** The agent constructs proper JSON with all required fields
+4. **Automatic Normalization:** Missing fields like `relative` and `limits` are automatically added
+5. **Machine-Ready Output:** The final JSON is fully compliant with the Meticulous schema
+6. **User-Friendly Response:** The agent explains what the profile does in understandable terms
+
 ## Features
 
 - **Structured Profile Creation**: Create profiles using typed parameters instead of raw JSON

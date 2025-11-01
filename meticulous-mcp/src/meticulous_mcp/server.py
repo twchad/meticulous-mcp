@@ -189,7 +189,7 @@ To build precise profiles, a granular understanding of the key variables and the
 **Temperature (°C)** - The Catalyst for Solubility
 - Dictates which flavor compounds dissolve from coffee grounds
 - Lighter roasts: Higher temperatures (92-96°C) needed for sweetness
-- Darker roasts: Lower temperatures (84-92°C) reduce bitterness
+- Darker roasts: Lower temperatures (82-90°C) reduce bitterness
 - Meticulous Control: High-precision PID temperature control for boiler and heated grouphead
 
 ### Understanding Puck Dynamics
@@ -390,7 +390,7 @@ Based on analysis of successful profile patterns, here are key principles for cr
 **Roast Level Matching**:
 - Light roasts: Higher temp (92-96°C) needed for proper extraction
 - Medium roasts: Balanced temp (90-93°C)
-- Dark roasts: Lower temp (84-92°C) prevents over-extraction bitterness
+- Dark roasts: Lower temp (82-90°C) prevents over-extraction bitterness
 
 **Profile-Specific Temperature**:
 - Flow profiles: Can use slightly higher temp (compensates for faster extraction)
@@ -539,7 +539,7 @@ Profile Blueprints:
 Temperature Guidelines:
 - Light roasts: 92-96°C
 - Medium roasts: 90-93°C  
-- Dark roasts: 84-92°C
+- Dark roasts: 82-90°C
 
 Profile Design Principles:
 - Control Strategy: Flow-controlled profiles are more adaptive to grind variations. Pressure-controlled profiles offer precise control but require dialed-in grind.
@@ -571,7 +571,7 @@ Create profiles with structured stages using exit triggers based on flow rate, w
         if roast_level.lower() in ["light", "very light"]:
             prompt_parts.append("(consider higher temperature 92-96°C and Turbo Shot or Soup Shot blueprint)")
         elif roast_level.lower() in ["dark", "medium-dark"]:
-            prompt_parts.append("(consider lower temperature 84-92°C and Classic Lever blueprint)")
+            prompt_parts.append("(consider lower temperature 82-90°C and Classic Lever blueprint)")
     
     if coffee_age_days is not None and coffee_age_days < 7:
         prompt_parts.append(f"(very fresh coffee, {coffee_age_days} days old - consider Bloom & Extract blueprint with bloom phase)")
@@ -725,7 +725,17 @@ Use the troubleshooting guide to diagnose and fix profile issues:
 - One parameter at a time to understand effects
 - Consider grind size first (if gushing/choking)
 - Then adjust profile parameters
-- Finally adjust temperature if needed"""
+- Finally adjust temperature if needed
+
+**Important: HTTP Connection Errors**:
+If you encounter HTTP connection errors (e.g., "Failed to resolve", "Max retries exceeded", "Connection refused") when calling tools, this is NOT a profile issue. Instead:
+1. Check if the Meticulous machine is powered on and booted up
+2. Verify network connectivity between your computer and the machine
+3. Check if the hostname is correct (default: meticulousmodelalmondmilklatte.local)
+4. Test connection by accessing http://your-machine-name.local in a browser
+5. Verify firewall settings aren't blocking connections
+
+Do NOT attempt to troubleshoot profile parameters if you're getting connection errors - the issue is with the machine connection, not the profile."""
     
     messages.append({
         "role": "system",
