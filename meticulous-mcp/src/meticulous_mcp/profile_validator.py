@@ -76,7 +76,7 @@ class ProfileValidator:
         if schema_path is None or not os.path.exists(schema_path):
             paths_str = ", ".join(str(p) for p in possible_paths) if possible_paths else "none"
             raise FileNotFoundError(
-                f"Schema file not found. Tried: {paths_str}. "
+                f"Schema file not found. Path given: {schema_path}. Tried: {paths_str}. "
                 "Please provide schema_path or ensure espresso-profile-schema is available."
             )
 

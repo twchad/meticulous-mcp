@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  meticulous-mcp:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - FASTMCP_HOST=0.0.0.0
+      - FASTMCP_PORT=8080
+      # CHANGE THIS: Replace with the IP address of your Meticulous machine 
+      # (e.g., http://192.168.1.5, http://10.0.0.15, http://172.16.0.20, etc.)
+      - METICULOUS_API_URL=http://192.168.4.8
+    volumes:
+      # Mount source code for easier development/debugging if needed
+      - .:/app

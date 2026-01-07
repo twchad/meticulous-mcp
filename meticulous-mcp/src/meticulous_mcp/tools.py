@@ -831,3 +831,43 @@ def run_profile_tool(profile_id: str) -> Dict[str, Any]:
         "status": action_result.status,
     }
 
+def list_shot_history_tool(date: Optional[str] = None) -> Dict[str, Any]:
+    """List available shot history (dates or files).
+    
+    Args:
+        date: Optional date string (YYYY-MM-DD). If provided, lists files for that date.
+              If not provided, lists available dates.
+    
+    Returns:
+        Dictionary containing list of dates or files.
+    """
+    _ensure_initialized()
+    
+    if date:
+        result = _api_client.get_shot_files(date)
+        if isinstance(result, APIError):
+            error_msg = result.error or result.status or "Unknown error"
+            raise Exception(f"Failed to list shot files for {date}: {error_msg}")
+        return {"files": [f.name for f in result]}
+    
+    result = _api_client.get_history_dates()
+    if isinstance(result, APIError):
+         error_msg = result.error or result.status or "Unknown error"
+         raise Exception(f"Failed to list history: {error_msg}")
+         
+    return {"dates": [d.name for d in result]}
+
+def get_shot_url_tool(date: str, filename: str) -> Dict[str, str]:
+    """Get the download URL for a specific shot.
+    
+    Args:
+        date: Date string (YYYY-MM-DD).
+        filename: Shot filename (e.g. HH:MM:SS.shot.json.zst).
+        
+    Returns:
+        Dictionary containing the URL.
+    """
+    _ensure_initialized()
+    
+    url = _api_client.get_shot_url(date, filename)
+    return {"url": url}

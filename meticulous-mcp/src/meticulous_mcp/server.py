@@ -38,6 +38,8 @@ from .tools import (
     delete_profile_tool,
     validate_profile_tool,
     run_profile_tool,
+    list_shot_history_tool,
+    get_shot_url_tool,
     ProfileCreateInput,
     ProfileUpdateInput,
 )
@@ -59,11 +61,31 @@ def _ensure_initialized() -> None:
         _api_client = MeticulousAPIClient(base_url=base_url)
         
         # Find schema file
-        current_dir = Path(__file__).parent.parent.parent
-        schema_path = current_dir / "espresso-profile-schema" / "schema.json"
-        if not schema_path.exists():
-            # Try alternative location
-            schema_path = Path(__file__).parent.parent.parent.parent / "espresso-profile-schema" / "schema.json"
+        possible_paths = []
+        
+        # 1. Check env var
+        env_schema_path = os.getenv("METICULOUS_SCHEMA_PATH")
+        if env_schema_path:
+            possible_paths.append(Path(env_schema_path))
+
+        # 2. Check standard Docker mount path
+        possible_paths.append(Path("/app/espresso-profile-schema/schema.json"))
+        
+        # 3. Check relative paths (development/local)
+        server_path = Path(__file__).resolve()
+        current_dir = server_path.parent.parent.parent
+        possible_paths.append(current_dir / "espresso-profile-schema" / "schema.json")
+        possible_paths.append(server_path.parent.parent.parent.parent / "espresso-profile-schema" / "schema.json")
+        
+        schema_path = None
+        for p in possible_paths:
+            if p.exists():
+                schema_path = p
+                break
+        
+        # If still not found, fallback to the relative path so the validator can report the error with context
+        if schema_path is None:
+            schema_path = possible_paths[-1]
         
         _validator = ProfileValidator(schema_path=str(schema_path))
         initialize_tools(_api_client, _validator)
@@ -223,6 +245,32 @@ def run_profile(profile_id: str) -> Dict[str, Any]:
     """Load and execute a profile (without saving)."""
     _ensure_initialized()
     return run_profile_tool(profile_id)
+
+
+@mcp.tool()
+def list_shot_history(date: Optional[str] = None) -> Dict[str, Any]:
+    """List available shot history.
+    
+    If date is provided, lists the specific shot files for that date.
+    If no date is provided, lists all dates with available history.
+    
+    Args:
+        date: Date string (YYYY-MM-DD). Optional.
+    """
+    _ensure_initialized()
+    return list_shot_history_tool(date)
+
+
+@mcp.tool()
+def get_shot_url(date: str, filename: str) -> Dict[str, Any]:
+    """Get the download URL for a specific shot log.
+    
+    Args:
+        date: Date string (YYYY-MM-DD).
+        filename: Shot filename (e.g. HH:MM:SS.shot.json.zst).
+    """
+    _ensure_initialized()
+    return get_shot_url_tool(date, filename)
 
 
 # Register resources
@@ -875,12 +923,19 @@ def troubleshoot_profile(
     
     system_context = """You are an expert espresso troubleshooting specialist for the Meticulous machine.
 
-Use the troubleshooting guide to diagnose and fix profile issues:
+**Operational Mandate: Fetch then Analyze**
+To diagnose issues effectively, you must follow this workflow:
+1.  **Locate Shot:** Use `list_shot_history(date=...)` to find the relevant shot file.
+2.  **Get URL:** Use `get_shot_url(date=..., filename=...)` to get the direct download link.
+3.  **Download & Analyze:** Use `curl` or similar to download the JSON from the URL to a local file. Use any locally written scripts to extract and analyze key metrics (flow stability, pressure limits, temperature stability). If no script currently exists, create it. Refine the script as necessary to address the user's inquiries and observations.
+4.  **Diagnose:** Combine your analysis with the user's reported symptom.
+
+**Troubleshooting Guide**:
 
 **Diagnosis Process**:
 1. Identify the taste/texture symptom
 2. Determine if it's under-extraction, over-extraction, or flow issue
-3. Check shot parameters (duration, yield, pressure curve)
+3. Check shot parameters (duration, yield, pressure curve) from the fetched data
 4. Apply targeted fixes based on the issue category
 
 **Key Principles**:
@@ -920,7 +975,7 @@ Do NOT attempt to troubleshoot profile parameters if you're getting connection e
         prompt_parts.append(f"(yield: {yield_weight}g)")
     
     prompt_text = " ".join(prompt_parts) + "."
-    prompt_text += "\n\nAnalyze the issue and recommend specific profile modifications."
+    prompt_text += "\n\nRetrieve the relevant shot data and analyze it to recommend modifications."
     
     messages.append({
         "role": "user",

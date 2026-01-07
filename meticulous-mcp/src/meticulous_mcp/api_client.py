@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import os
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 
-from meticulous.api import Api, APIError, Profile, PartialProfile, ActionResponse, ActionType, ChangeProfileResponse
+from meticulous.api import Api, APIError, Profile, PartialProfile, ActionResponse, ActionType, ChangeProfileResponse, HistoryFile
 
 
 class MeticulousAPIClient:
@@ -137,4 +137,36 @@ class MeticulousAPIClient:
         if isinstance(result, APIError):
             return result
         return result.profile
+    
+    def get_history_dates(self) -> Union[List[HistoryFile], APIError]:
+        """Get list of dates available in history.
+        
+        Returns:
+            List of HistoryFile objects (directories) or APIError on failure
+        """
+        return self._api.get_history_dates()
+        
+    def get_shot_files(self, date_str: str) -> Union[List[HistoryFile], APIError]:
+        """Get list of shot files for a specific date.
+        
+        Args:
+            date_str: Date string (YYYY-MM-DD)
+            
+        Returns:
+            List of HistoryFile objects (files) or APIError on failure
+        """
+        return self._api.get_shot_files(date_str)
+
+    def get_shot_url(self, date_str: str, filename: str) -> str:
+        """Get the full URL for a shot log file.
+        
+        Args:
+            date_str: Date string (YYYY-MM-DD)
+            filename: Filename (e.g. HH:MM:SS.shot.json.zst)
+            
+        Returns:
+            Full URL string
+        """
+        base = self.base_url.rstrip('/')
+        return f"{base}/api/v1/history/files/{date_str}/{filename}"
 
