@@ -14,7 +14,7 @@ This ensures that `docker compose up --build` works immediately for any user wit
 ## 2. Container Strategy
 We treat the application as a portable appliance.
 
-*   **Dockerfile:** Builds a lightweight Python environment. It installs the local "vendored" packages (`pyMeticulous`, etc.) directly into the container image.
+*   **Dockerfile:** Builds a lightweight Python environment. It installs the necessary dependencies via pip as defined in `requirements.txt`.
 *   **Docker Compose:** Standardizes the runtime arguments (ports, environment variables) so users only need to configure their machine IP.
 *   **Entry Point (`run_http.py`):** A custom wrapper script is used instead of running `mcp` directly. This allows us to explicitly bind to `0.0.0.0` (accessible outside the container) and manage transport security settings.
 
