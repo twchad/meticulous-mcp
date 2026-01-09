@@ -302,6 +302,23 @@ def get_shot_url(date: str, filename: str) -> Dict[str, Any]:
     return get_shot_url_tool(date, filename)
 
 
+@mcp.tool()
+def get_profiling_knowledge(topic: str = "rfc") -> str:
+    """Get expert knowledge on espresso profiling.
+    
+    Args:
+        topic: 'rfc' for the Open Espresso Profile Format RFC, 'guide' for the general profiling guide, or 'schema' for the JSON schema.
+    """
+    _ensure_initialized()
+    
+    if topic.lower() == "rfc":
+        return espresso_rfc()
+    elif topic.lower() == "schema":
+        return espresso_schema()
+    else:
+        return espresso_knowledge()
+
+
 # Register resources
 @mcp.resource("espresso://knowledge")
 def espresso_knowledge() -> str:
