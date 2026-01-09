@@ -23,12 +23,7 @@ This guide explains how to build and run the Meticulous MCP server using Docker.
      - METICULOUS_API_URL=http://<YOUR_MACHINE_IP>
    ```
 
-2. **Build the container:**
-   ```bash
-   docker compose build
-   ```
-
-3. **Start the server:**
+3. **Build and start the container:**
    ```bash
    docker compose up -d --build --wait
    ```
