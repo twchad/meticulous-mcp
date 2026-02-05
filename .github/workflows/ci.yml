@@ -1,0 +1,68 @@
+name: CI/CD Pipeline
+
+# Trigger the workflow on push and pull request events
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+# Define environment variables
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # Build and test job
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Step 1: Checkout the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Step 2: Set up Python environment
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'  # Cache pip dependencies for faster builds
+      
+      # Step 3: Display Python version for debugging
+      - name: Display Python version
+        run: python --version
+      
+      # Step 4: Install dependencies
+      - name: Install dependencies
+        run: |
+          cd meticulous-mcp
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      # Step 5: Run tests with pytest
+      # The PYTHONPATH is set to include the src directory for module imports
+      - name: Run tests
+        run: |
+          cd meticulous-mcp
+          PYTHONPATH=${{ github.workspace }}/meticulous-mcp/src python -m pytest tests/ -v --tb=short --junitxml=test-results.xml
+      
+      # Step 6: Upload test results (optional, for GitHub UI integration)
+      - name: Upload test results
+        if: always()  # Upload results even if tests fail
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: meticulous-mcp/test-results.xml
+      
+      # Step 7: Publish test results summary
+      - name: Publish test results
+        if: always()  # Publish results even if tests fail
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: meticulous-mcp/test-results.xml
+          check_name: Test Results
