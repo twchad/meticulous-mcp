@@ -226,9 +226,13 @@ def test_create_dynamics_interpolation_types():
     
     curve = create_dynamics(points=[[0, 4], [10, 8]], over="time", interpolation="curve")
     assert curve.interpolation == "curve"
-    
-    none = create_dynamics(points=[[0, 4]], over="time", interpolation="none")
-    assert none.interpolation == "none"
+
+
+def test_create_dynamics_rejects_none_interpolation():
+    """Test that 'none' interpolation is rejected (not supported by machine)."""
+    import pytest
+    with pytest.raises(ValueError, match="not supported"):
+        create_dynamics(points=[[0, 4]], over="time", interpolation="none")
 
 
 def test_create_stage_with_limits():
@@ -477,7 +481,8 @@ def test_profile_to_dict_normalizes_relative():
     # With normalization (default)
     profile_dict = profile_to_dict(profile, normalize=True)
     assert "relative" in profile_dict["stages"][0]["exit_triggers"][0]
-    assert profile_dict["stages"][0]["exit_triggers"][0]["relative"] is False
+    # Time triggers default to relative=True (relative to stage start)
+    assert profile_dict["stages"][0]["exit_triggers"][0]["relative"] is True
     
     # Without normalization
     profile_dict_no_norm = profile_to_dict(profile, normalize=False)
@@ -510,7 +515,8 @@ def test_profile_to_dict_normalizes_both():
     
     # Both should be normalized
     assert stage_dict["limits"] == []
-    assert stage_dict["exit_triggers"][0]["relative"] is False
+    # Time triggers default to relative=True (relative to stage start)
+    assert stage_dict["exit_triggers"][0]["relative"] is True
 
 
 def test_normalize_profile_with_none_limits():
@@ -554,10 +560,10 @@ def test_normalize_profile_with_missing_relative():
     )
     
     normalized = normalize_profile(profile)
-    # After normalization, relative should be False
+    # After normalization, time triggers get relative=True (relative to stage start)
     # But Pydantic might exclude None, so check via dict
     normalized_dict = profile_to_dict(normalized, normalize=True)
-    assert normalized_dict["stages"][0]["exit_triggers"][0]["relative"] is False
+    assert normalized_dict["stages"][0]["exit_triggers"][0]["relative"] is True
 
 
 def test_normalize_profile_preserves_existing_values():
@@ -638,4 +644,66 @@ def test_normalize_profile_no_changes_needed():
     # If no changes needed, should return same or equivalent profile
     assert normalized.stages[0].limits == limits
     assert len(normalized.stages[0].exit_triggers) == 1
+
+
+# ==================== VARIABLES ARRAY ALWAYS PRESENT TESTS ====================
+
+
+def test_create_profile_always_has_variables_array():
+    """Test that create_profile always includes variables array, even when not provided."""
+    profile = create_profile(
+        name="Test Profile",
+        author="Test Author",
+        stages=[],
+        # Note: no variables argument provided
+    )
+    # variables should be an empty list, not None
+    assert profile.variables is not None
+    assert isinstance(profile.variables, list)
+    assert len(profile.variables) == 0
+
+
+def test_create_profile_with_none_variables_becomes_empty_list():
+    """Test that explicitly passing None for variables results in empty list."""
+    profile = create_profile(
+        name="Test Profile",
+        author="Test Author",
+        stages=[],
+        variables=None,  # Explicitly None
+    )
+    # Should be converted to empty list
+    assert profile.variables is not None
+    assert isinstance(profile.variables, list)
+    assert len(profile.variables) == 0
+
+
+def test_profile_to_dict_always_has_variables_array():
+    """Test that profile_to_dict always includes variables array in output."""
+    profile = create_profile(
+        name="Test Profile",
+        author="Test Author",
+        stages=[],
+    )
+    profile_dict = profile_to_dict(profile, normalize=True)
+    
+    # variables should always be present in the dict
+    assert "variables" in profile_dict
+    assert isinstance(profile_dict["variables"], list)
+
+
+def test_profile_to_dict_preserves_existing_variables():
+    """Test that profile_to_dict preserves existing variables."""
+    variable = create_variable("Target Pressure", "target_pressure", "pressure", 8.0)
+    profile = create_profile(
+        name="Test Profile",
+        author="Test Author",
+        stages=[],
+        variables=[variable],
+    )
+    profile_dict = profile_to_dict(profile, normalize=True)
+    
+    assert "variables" in profile_dict
+    assert len(profile_dict["variables"]) == 1
+    assert profile_dict["variables"][0]["key"] == "target_pressure"
+    assert profile_dict["variables"][0]["value"] == 8.0
 

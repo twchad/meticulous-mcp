@@ -119,7 +119,7 @@ def create_profile(input_data: str) -> Dict[str, Any]:
                   "type": "flow" | "pressure" | "power",
                   "dynamics_points": [[x, y], ...],
                   "dynamics_over": "time" | "weight" | "piston_position",
-                  "dynamics_interpolation": "linear" | "curve" | "none",
+                  "dynamics_interpolation": "linear" | "curve",
                   "exit_triggers": [
                     {"type": "weight", "value": 30, "comparison": ">="},
                     ...

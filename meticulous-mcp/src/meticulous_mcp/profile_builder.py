@@ -102,11 +102,19 @@ def create_dynamics(
     Args:
         points: List of [x, y] points where values can be numbers or variable references
         over: What to interpolate over: "piston_position", "time", or "weight"
-        interpolation: Interpolation method: "none", "linear", or "curve"
+        interpolation: Interpolation method: "linear" or "curve". Note: "none" is not supported.
         
     Returns:
         Dynamics object
+        
+    Raises:
+        ValueError: If interpolation is "none" (not supported by the machine)
     """
+    if interpolation == "none":
+        raise ValueError(
+            "Interpolation 'none' is not supported by the Meticulous machine. "
+            "Use 'linear' for straight-line interpolation or 'curve' for smooth curves."
+        )
     return Dynamics(points=points, over=over, interpolation=interpolation)
 
 
@@ -181,6 +189,11 @@ def create_profile(
     if stages is None:
         stages = []
     
+    # Variables array must always be present (even if empty) for Meticulous app compatibility
+    # The app crashes when trying to add variables to a profile without the variables array
+    if variables is None:
+        variables = []
+    
     return Profile(
         name=name,
         id=profile_id,
@@ -210,6 +223,11 @@ def profile_to_dict(profile: Profile, normalize: bool = True) -> Dict[str, Any]:
     profile_dict = profile.model_dump(exclude_none=True)
     
     if normalize:
+        # Ensure variables array is always present (even if empty) for Meticulous app compatibility
+        # The app crashes when trying to add variables to a profile without the variables array
+        if "variables" not in profile_dict or profile_dict.get("variables") is None:
+            profile_dict["variables"] = []
+        
         # Ensure limits is always present as an empty array if None or missing
         # The machine expects limits to always be an array, not missing/null
         if "stages" in profile_dict:

@@ -52,7 +52,7 @@ class StageInput(BaseModel):
         description="What to interpolate over: 'piston_position', 'time', or 'weight'"
     )
     dynamics_interpolation: str = Field(
-        default="linear", description="Interpolation method: 'none', 'linear', or 'curve'"
+        default="linear", description="Interpolation method: 'linear' or 'curve'. Note: 'none' is not supported by the machine."
     )
     exit_triggers: List[Dict[str, Any]] = Field(
         description="List of exit trigger dictionaries. Each trigger must contain 'type' and 'value'. Optional fields: 'relative' (boolean, whether value is relative to stage start), 'comparison' (string, '>=' or '<=' to transition based on sensor readings). If multiple triggers are present, the stage will exit as soon as the FIRST condition is met (logical OR). Example: [{'type': 'weight', 'value': 30, 'comparison': '>='}] exits when weight reaches or exceeds 30g."
