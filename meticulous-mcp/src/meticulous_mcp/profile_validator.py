@@ -658,6 +658,7 @@ class ProfileValidator:
             r'\U00002100-\U0000214F'  # Letterlike Symbols (includes ℹ️ U+2139)
             r'\U0001F000-\U0001F02F'  # Mahjong tiles
             r'\U0001FA00-\U0001FAFF'  # Extended-A symbols
+            r'\uFE00-\uFE0F'          # Variation Selectors (emoji presentation)
             r']'
         )
         
