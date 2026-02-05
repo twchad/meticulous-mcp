@@ -41,6 +41,63 @@ def reset_server_state():
     server_module._validator = None
 
 
+def setup_path_mocks(schema_exists=True):
+    """
+    Helper to set up Path mocks that support division operator.
+    
+    Args:
+        schema_exists: Whether the schema file should exist
+        
+    Returns:
+        tuple: (mock_path_class callable, mock_server_path)
+    """
+    def create_path_mock(exists_result=False):
+        """Create a mock Path object that supports / operator"""
+        path_mock = Mock()
+        
+        def truediv_handler(self, other):
+            # Create another mock for the result of division
+            result_mock = Mock()
+            result_mock.exists.return_value = exists_result
+            result_mock.__truediv__ = truediv_handler
+            return result_mock
+        
+        path_mock.__truediv__ = truediv_handler
+        path_mock.exists.return_value = exists_result
+        return path_mock
+    
+    # Create the mock for the server file path
+    mock_server_path = Mock()
+    mock_server_path.resolve.return_value = mock_server_path
+    
+    # Create parent chain with proper division support
+    # parent.parent.parent / "espresso-profile-schema" / "schema.json" should return schema_exists
+    mock_parent3 = Mock()
+    mock_parent3.__truediv__ = lambda self, name: create_path_mock(exists_result=schema_exists) if name == "espresso-profile-schema" else create_path_mock(exists_result=False)
+    
+    mock_parent4 = Mock()
+    mock_parent4.__truediv__ = lambda self, name: create_path_mock(exists_result=False)
+    mock_parent3.parent = mock_parent4
+    
+    mock_parent2 = Mock()
+    mock_parent2.parent = mock_parent3
+    
+    mock_parent1 = Mock()
+    mock_parent1.parent = mock_parent2
+    
+    mock_server_path.parent = mock_parent1
+    
+    # Mock Path() constructor to return appropriate mocks
+    def path_constructor(path_arg=None):
+        # For server.py file, return the mock with proper parent chain
+        if path_arg and hasattr(path_arg, 'endswith') and path_arg.endswith('server.py'):
+            return mock_server_path
+        # For any other path string, return a path that doesn't exist
+        return create_path_mock(exists_result=False)
+    
+    return path_constructor, mock_server_path
+
+
 def test_ensure_initialized_first_call(reset_server_state, mock_api_client, mock_validator):
     """Test _ensure_initialized on first call."""
     with patch("meticulous_mcp.server.MeticulousAPIClient") as mock_client_class, \
@@ -51,22 +108,9 @@ def test_ensure_initialized_first_call(reset_server_state, mock_api_client, mock
         mock_client_class.return_value = mock_api_client
         mock_validator_class.return_value = mock_validator
         
-        # Mock schema path to exist
-        mock_schema_path = Mock()
-        mock_schema_path.exists.return_value = True
-        
-        # Create a mock Path that supports division
-        def mock_path_div(path_str):
-            if path_str == "espresso-profile-schema":
-                inner_path = Mock()
-                inner_path.__truediv__ = Mock(return_value=mock_schema_path)
-                return inner_path
-            return mock_schema_path
-        
-        mock_path_instance = Mock()
-        mock_path_instance.parent.parent.parent = Mock()
-        mock_path_instance.parent.parent.parent.__truediv__ = Mock(side_effect=mock_path_div)
-        mock_path_class.return_value = mock_path_instance
+        # Setup path mocks with schema existing
+        path_constructor, _ = setup_path_mocks(schema_exists=True)
+        mock_path_class.side_effect = path_constructor
         
         # Test initialization through public function
         server_module._ensure_initialized()
@@ -84,39 +128,9 @@ def test_ensure_initialized_schema_path_not_found(reset_server_state):
         
         mock_client_class.return_value = Mock()
         
-        # Mock schema path not found
-        mock_schema_path = Mock()
-        mock_schema_path.exists.return_value = False
-        
-        def mock_path_div_first(path_str):
-            """First division: current_dir / "espresso-profile-schema" """
-            if path_str == "espresso-profile-schema":
-                inner_path = Mock()
-                inner_path.__truediv__ = Mock(return_value=mock_schema_path)
-                return inner_path
-            return mock_schema_path
-        
-        # Create the full path chain
-        mock_path_instance = Mock()
-        
-        # Path(__file__).parent.parent.parent
-        mock_parent3 = Mock()
-        mock_parent3.__truediv__ = Mock(side_effect=mock_path_div_first)
-        
-        mock_parent2 = Mock()
-        mock_parent2.parent = mock_parent3
-        
-        mock_parent1 = Mock()
-        mock_parent1.parent = mock_parent2
-        
-        mock_path_instance.parent = mock_parent1
-        
-        # Path(__file__).parent.parent.parent.parent (alternative)
-        mock_parent4 = Mock()
-        mock_parent4.__truediv__ = Mock(side_effect=mock_path_div_first)
-        mock_parent3.parent = mock_parent4
-        
-        mock_path_class.return_value = mock_path_instance
+        # Setup path mocks with schema NOT existing
+        path_constructor, _ = setup_path_mocks(schema_exists=False)
+        mock_path_class.side_effect = path_constructor
         
         # Should still initialize (validator will handle missing schema)
         with patch("meticulous_mcp.server.ProfileValidator") as mock_validator_class:
@@ -139,21 +153,14 @@ def test_espresso_schema_success(reset_server_state):
          patch("meticulous_mcp.server.Path") as mock_path_class, \
          patch("builtins.open", create=True) as mock_open:
         
-        # Mock schema file
+        # Setup path mocks with schema existing
+        path_constructor, mock_server_path = setup_path_mocks(schema_exists=True)
+        mock_path_class.side_effect = path_constructor
+        
+        # Set the _schema_path module variable to a mock path that exists
         mock_schema_path = Mock()
         mock_schema_path.exists.return_value = True
-        
-        def mock_path_div(path_str):
-            if path_str == "espresso-profile-schema":
-                inner_path = Mock()
-                inner_path.__truediv__ = Mock(return_value=mock_schema_path)
-                return inner_path
-            return mock_schema_path
-        
-        mock_path_instance = Mock()
-        mock_path_instance.parent.parent.parent = Mock()
-        mock_path_instance.parent.parent.parent.__truediv__ = Mock(side_effect=mock_path_div)
-        mock_path_class.return_value = mock_path_instance
+        server_module._schema_path = mock_schema_path
         
         # Mock file content
         schema_data = {"type": "object", "properties": {"name": {"type": "string"}}}
@@ -416,20 +423,10 @@ def test_ensure_initialized_uses_env_var(reset_server_state):
         
         mock_client_class.return_value = Mock()
         mock_validator_class.return_value = Mock()
-        mock_schema_path = Mock()
-        mock_schema_path.exists.return_value = True
         
-        def mock_path_div(path_str):
-            if path_str == "espresso-profile-schema":
-                inner_path = Mock()
-                inner_path.__truediv__ = Mock(return_value=mock_schema_path)
-                return inner_path
-            return mock_schema_path
-        
-        mock_path_instance = Mock()
-        mock_path_instance.parent.parent.parent = Mock()
-        mock_path_instance.parent.parent.parent.__truediv__ = Mock(side_effect=mock_path_div)
-        mock_path_class.return_value = mock_path_instance
+        # Setup path mocks with schema existing
+        path_constructor, _ = setup_path_mocks(schema_exists=True)
+        mock_path_class.side_effect = path_constructor
         
         server_module._ensure_initialized()
         
@@ -450,20 +447,10 @@ def test_ensure_initialized_default_url(reset_server_state):
         
         mock_client_class.return_value = Mock()
         mock_validator_class.return_value = Mock()
-        mock_schema_path = Mock()
-        mock_schema_path.exists.return_value = True
         
-        def mock_path_div(path_str):
-            if path_str == "espresso-profile-schema":
-                inner_path = Mock()
-                inner_path.__truediv__ = Mock(return_value=mock_schema_path)
-                return inner_path
-            return mock_schema_path
-        
-        mock_path_instance = Mock()
-        mock_path_instance.parent.parent.parent = Mock()
-        mock_path_instance.parent.parent.parent.__truediv__ = Mock(side_effect=mock_path_div)
-        mock_path_class.return_value = mock_path_instance
+        # Setup path mocks with schema existing
+        path_constructor, _ = setup_path_mocks(schema_exists=True)
+        mock_path_class.side_effect = path_constructor
         
         server_module._ensure_initialized()
         

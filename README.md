@@ -584,10 +584,35 @@ Load and execute a profile (without saving).
 
 ## Development
 
-Run tests:
+### Running Tests
+
+To run the test suite locally:
+
 ```bash
-pytest
+cd meticulous-mcp
+PYTHONPATH=/path/to/meticulous-mcp/src pytest tests/ -v
 ```
+
+Or use the convenience script from the root directory:
+
+```bash
+./run_all_tests.sh
+```
+
+### CI/CD Pipeline
+
+This repository uses GitHub Actions for continuous integration and continuous deployment. The CI/CD pipeline automatically:
+
+- **Triggers on**: Push to `main` or `develop` branches, and pull requests targeting these branches
+- **Build steps**:
+  1. Sets up Python 3.11 environment
+  2. Installs all dependencies from `requirements.txt`
+  3. Runs the full test suite with pytest
+  4. Reports test results and coverage
+
+**Workflow file**: `.github/workflows/ci.yml`
+
+The workflow ensures that all code changes are automatically tested before being merged, helping maintain code quality and catch issues early in the development process.
 
 ## Dependencies
 
