@@ -60,7 +60,7 @@ cd meticulous-mcp
 pip install -r requirements.txt
 ```
 
-**Note:** This project uses local dependencies (`pyMeticulous` and `python-sdk`). Make sure these directories are in the parent folder alongside `meticulous-mcp`.
+**Note:** All dependencies (including `pyMeticulous` and the MCP SDK) are installed automatically from PyPI via `requirements.txt`.
 
 ### Step 4: Configure Your MCP Client
 
@@ -80,19 +80,19 @@ Add this configuration:
     "meticulous-mcp": {
       "command": "python3.11",
       "args": [
-        "/absolute/path/to/Meticulous MCP/meticulous-mcp/run_server.py"
+        "/absolute/path/to/meticulous-mcp/meticulous-mcp/run_server.py"
       ],
       "env": {
-        "PYTHONPATH": "/absolute/path/to/Meticulous MCP/meticulous-mcp/src:/absolute/path/to/Meticulous MCP/pyMeticulous:/absolute/path/to/Meticulous MCP/python-sdk/src"
+        "PYTHONPATH": "/absolute/path/to/meticulous-mcp/meticulous-mcp/src"
       }
     }
   }
 }
 ```
 
-**Replace `/absolute/path/to/Meticulous MCP` with your actual path.**
+**Replace `/absolute/path/to/meticulous-mcp` with the path where you cloned the repository.**
 
-**Note:** The `PYTHONPATH` environment variable is optional when using `run_server.py` since it automatically sets up paths internally. However, including it serves as a safeguard and ensures compatibility across different execution contexts. If you encounter import errors, make sure PYTHONPATH is set correctly.
+**Note:** `run_server.py` automatically sets up paths internally, so `PYTHONPATH` is optional but serves as a safeguard. All other dependencies (`pyMeticulous`, `mcp`) are installed via pip in Step 3.
 
 **Mac example:**
 ```json
@@ -101,10 +101,10 @@ Add this configuration:
     "meticulous-mcp": {
       "command": "python3.11",
       "args": [
-        "/Users/yourname/Meticulous MCP/meticulous-mcp/run_server.py"
+        "/Users/yourname/meticulous-mcp/meticulous-mcp/run_server.py"
       ],
       "env": {
-        "PYTHONPATH": "/Users/yourname/Meticulous MCP/meticulous-mcp/src:/Users/yourname/Meticulous MCP/pyMeticulous:/Users/yourname/Meticulous MCP/python-sdk/src"
+        "PYTHONPATH": "/Users/yourname/meticulous-mcp/meticulous-mcp/src"
       }
     }
   }
@@ -118,10 +118,10 @@ Add this configuration:
     "meticulous-mcp": {
       "command": "python",
       "args": [
-        "C:\\Users\\YourName\\Meticulous MCP\\meticulous-mcp\\run_server.py"
+        "C:\\Users\\YourName\\meticulous-mcp\\meticulous-mcp\\run_server.py"
       ],
       "env": {
-        "PYTHONPATH": "C:\\Users\\YourName\\Meticulous MCP\\meticulous-mcp\\src;C:\\Users\\YourName\\Meticulous MCP\\pyMeticulous;C:\\Users\\YourName\\Meticulous MCP\\python-sdk\\src"
+        "PYTHONPATH": "C:\\Users\\YourName\\meticulous-mcp\\meticulous-mcp\\src"
       }
     }
   }
@@ -174,16 +174,76 @@ Testing imports...
 
 Your Meticulous MCP server should now be available!
 
+## Alternative: Docker Setup
+
+If you prefer containerized deployment, you can run the server via Docker instead of the local setup above.
+
+### Prerequisites
+
+- [Docker](https://www.docker.com/get-started) and [Docker Compose](https://docs.docker.com/compose/install/) installed.
+- A Meticulous machine on your local network.
+
+### Build & Run
+
+1. Clone the repository (if you haven't already) and enter it:
+   ```bash
+   git clone https://github.com/twchad/meticulous-mcp.git
+   cd meticulous-mcp
+   ```
+
+2. Configure your machine's address. The default is `http://meticulous.local` (mDNS). To override, either:
+   - Set the environment variable: `export METICULOUS_API_URL=http://192.168.1.5`
+   - Or create a `.env` file: `echo "METICULOUS_API_URL=http://192.168.1.5" > .env`
+
+3. Build and start:
+   ```bash
+   docker compose up -d --build --wait
+   ```
+
+### Connect Your MCP Client (Docker)
+
+**Option 1: SSE / HTTP (Recommended)**
+
+Works whether the container is local or remote:
+```json
+{
+  "mcpServers": {
+    "meticulous": {
+      "url": "http://<HOST_IP>:8080/mcp"
+    }
+  }
+}
+```
+
+**Option 2: Docker Exec (Local Only)**
+```json
+{
+  "mcpServers": {
+    "meticulous": {
+      "command": "docker",
+      "args": [
+        "exec", "-i", "meticulous-mcp-server",
+        "python", "meticulous-mcp/run_server.py"
+      ]
+    }
+  }
+}
+```
+
 ## What You Can Do
 
 Once connected, you can ask your AI assistant to:
 
+- **Machine info** - "What firmware is my machine running?"
+- **Manage settings** - "Enable auto-preheat" or "Change the sound theme"
+- **Access shot history** - "Get the log file for my last shot"
 - **Create espresso profiles** - "Create a new espresso profile with..."
 - **List profiles** - "Show me all my espresso profiles"
 - **Get profile details** - "Show me the details of profile X or explain this profile to me.."
 - **Update profiles** - "Modify profile X to..."
 - **Duplicate profiles** - "Copy profile X and name it Y"
 - **Validate profiles** - "Check if this profile JSON is valid"
+- **Select profiles** - "Select profile X on the machine" (without starting)
 - **Run profiles** - "Execute profile X on the machine"
 
 ## Example Agent Conversation
@@ -348,9 +408,9 @@ The profile is now saved on your Meticulous machine and ready to use!"
 
 ## Advanced Configuration
 
-### Using a Different Host Name
+### Configuring Your Machine Address
 
-If your Meticulous machine uses a different hostname (not the default `meticulousmodelalmondmilklatte.local`), you can configure it in two ways:
+Set the `METICULOUS_API_URL` environment variable to your machine's address. Each Meticulous machine has a unique hostname (e.g. `meticulousmodel<words>.local`). You can find it in your machine's settings, or use the IP address directly.
 
 #### Option 1: Environment Variable (Recommended)
 
@@ -363,10 +423,10 @@ Add the `METICULOUS_API_URL` environment variable to your MCP client configurati
     "meticulous-mcp": {
       "command": "python3.11",
       "args": [
-        "/Users/yourname/Meticulous MCP/meticulous-mcp/run_server.py"
+        "/Users/yourname/meticulous-mcp/meticulous-mcp/run_server.py"
       ],
       "env": {
-        "PYTHONPATH": "/Users/yourname/Meticulous MCP/meticulous-mcp/src:/Users/yourname/Meticulous MCP/pyMeticulous:/Users/yourname/Meticulous MCP/python-sdk/src",
+        "PYTHONPATH": "/Users/yourname/meticulous-mcp/meticulous-mcp/src",
         "METICULOUS_API_URL": "http://your-machine-name.local"
       }
     }
@@ -381,10 +441,10 @@ Add the `METICULOUS_API_URL` environment variable to your MCP client configurati
     "meticulous-mcp": {
       "command": "python",
       "args": [
-        "C:\\Users\\YourName\\Meticulous MCP\\meticulous-mcp\\run_server.py"
+        "C:\\Users\\YourName\\meticulous-mcp\\meticulous-mcp\\run_server.py"
       ],
       "env": {
-        "PYTHONPATH": "C:\\Users\\YourName\\Meticulous MCP\\meticulous-mcp\\src;C:\\Users\\YourName\\Meticulous MCP\\pyMeticulous;C:\\Users\\YourName\\Meticulous MCP\\python-sdk\\src",
+        "PYTHONPATH": "C:\\Users\\YourName\\meticulous-mcp\\meticulous-mcp\\src",
         "METICULOUS_API_URL": "http://your-machine-name.local"
       }
     }
@@ -415,7 +475,7 @@ set METICULOUS_API_URL=http://your-machine-name.local
 2. Advanced system settings → Environment Variables
 3. Add new System variable: `METICULOUS_API_URL` = `http://your-machine-name.local`
 
-**Default:** If not set, defaults to `http://meticulousmodelalmondmilklatte.local`
+**Required:** `METICULOUS_API_URL` must be set. The server will not start without it.
 
 ### Alternative: Using Python Module Directly
 
@@ -432,7 +492,7 @@ If you prefer to use the Python module directly instead of the run script:
         "meticulous_mcp.server"
       ],
       "env": {
-        "PYTHONPATH": "/Users/yourname/Meticulous MCP/meticulous-mcp/src:/Users/yourname/Meticulous MCP/pyMeticulous:/Users/yourname/Meticulous MCP/python-sdk/src"
+        "PYTHONPATH": "/Users/yourname/meticulous-mcp/meticulous-mcp/src"
       }
     }
   }
@@ -460,10 +520,8 @@ If you prefer to use the Python module directly instead of the run script:
 **Solution:** 
 - If using `run_server.py`: The script should handle paths automatically, but ensure PYTHONPATH is set in your MCP config as a safeguard
 - If using the module approach (`-m meticulous_mcp.server`): PYTHONPATH is required
-- Verify your PYTHONPATH includes all three directories:
-  1. `meticulous-mcp/src`
-  2. `pyMeticulous` (parent directory)
-  3. `python-sdk/src` (parent directory)
+- Verify your PYTHONPATH includes `meticulous-mcp/src`
+- Ensure dependencies are installed: `pip install -r meticulous-mcp/requirements.txt`
 
 ### Path Issues on Windows
 
@@ -506,6 +564,15 @@ If you prefer to use the Python module directly instead of the run script:
 
 ## Tools Reference
 
+### get_machine_info
+Get machine device info (firmware, serial, name, etc.).
+
+### get_settings / update_setting
+Read and modify machine settings like `auto_preheat`, `enable_sounds`, etc.
+
+### list_shot_history / get_shot_url
+Browse history by date and retrieve direct download links for shot logs.
+
 ### create_profile
 Create a new espresso profile with structured parameters.
 
@@ -519,6 +586,7 @@ Create a new espresso profile with structured parameters.
 **Optional fields:**
 - `variables`: Custom variables for dynamic values
 - `accent_color`: Hex color code (e.g., "#FF5733")
+- `image`: Base64 data URI or relative URL for profile image
 
 ### list_profiles
 List all available profiles.
@@ -536,6 +604,7 @@ Update an existing profile.
 - `name`: New profile name
 - `temperature`: New temperature in Celsius
 - `final_weight`: New target weight in grams
+- `image`: Base64 data URI or relative URL for profile image
 - `stages_json`: JSON string containing updated stages array
 
 **Example:**
@@ -556,19 +625,32 @@ Delete a profile permanently.
 ### validate_profile
 Validate a profile JSON against the schema.
 
+### select_profile
+Select a profile on the machine's display.
+
 ### run_profile
 Load and execute a profile (without saving).
+
+### get_profiling_knowledge
+Get expert knowledge on espresso profiling. Accepts a `topic` parameter:
+- `rfc` - Open Espresso Profile Format RFC
+- `guide` - General profiling guide
+- `schema` - JSON schema reference
+- `mechanics` - Meticulous hardware axioms (hydraulic inertia, sensing, trigger behavior, transitions)
 
 ## Resources
 
 - `espresso://knowledge` - Espresso profiling knowledge
 - `espresso://schema` - Profile schema reference
+- `espresso://rfc` - Open Espresso Profile Format RFC
+- `meticulous://mechanics` - Machine-specific physics and control axioms
 - `espresso://profile/{id}` - Individual profile as resource
 
 ## Prompts
 
 - `create_espresso_profile` - Prompt template for creating profiles
 - `modify_espresso_profile` - Prompt template for modifying profiles
+- `troubleshoot_profile` - Prompt template for diagnosing shot issues
 
 ## Development
 
@@ -579,10 +661,12 @@ pytest
 
 ## Dependencies
 
-- pyMeticulous: Python API wrapper for Meticulous machine
-- mcp: Model Context Protocol SDK
+- [pyMeticulous](https://pypi.org/project/pyMeticulous/): Python API wrapper for Meticulous machine
+- [mcp](https://pypi.org/project/mcp/): Model Context Protocol SDK
 - jsonschema: JSON schema validation
 - pydantic: Data validation
+
+All dependencies are installed via `pip install -r meticulous-mcp/requirements.txt`.
 
 ## License
 
@@ -590,12 +674,6 @@ This project is licensed under the GNU General Public License v3.0 or later (GPL
 
 ### GPL 3 Compliance
 
-This project uses code from `pyMeticulous`, which is licensed under GPL 3.0. As a result, this project must also be licensed under GPL 3.0 in accordance with the GPL copyleft requirements.
-
-### Attribution
-
-This project incorporates code from:
-- **pyMeticulous**: Licensed under GPL 3.0 (see `../pyMeticulous/LICENSE`)
-- **python-sdk (mcp)**: Licensed under MIT License (see `../python-sdk/LICENSE`)
+This project depends on `pyMeticulous`, which is licensed under GPL 3.0. As a result, this project is also licensed under GPL 3.0 in accordance with the GPL copyleft requirements.
 
 For full license terms, see the [LICENSE](LICENSE) file in this directory.
