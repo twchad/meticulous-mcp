@@ -38,6 +38,12 @@ from .tools import (
     delete_profile_tool,
     validate_profile_tool,
     run_profile_tool,
+    select_profile_tool,
+    get_machine_info_tool,
+    get_settings_tool,
+    update_setting_tool,
+    list_shot_history_tool,
+    get_shot_url_tool,
     ProfileCreateInput,
     ProfileUpdateInput,
 )
@@ -48,24 +54,50 @@ mcp = FastMCP("Meticulous Espresso Profile Server")
 # Global instances
 _api_client: Optional[MeticulousAPIClient] = None
 _validator: Optional[ProfileValidator] = None
+_schema_path: Optional[Path] = None
+_rfc_path: Optional[Path] = None
 
 
 def _ensure_initialized() -> None:
     """Ensure server is initialized."""
-    global _api_client, _validator
+    global _api_client, _validator, _schema_path, _rfc_path
     if _api_client is None or _validator is None:
         # Initialize on first use
-        base_url = os.getenv("METICULOUS_API_URL", "http://meticulousmodelalmondmilklatte.local")
+        base_url = os.getenv("METICULOUS_API_URL")
         _api_client = MeticulousAPIClient(base_url=base_url)
         
-        # Find schema file
-        current_dir = Path(__file__).parent.parent.parent
-        schema_path = current_dir / "espresso-profile-schema" / "schema.json"
-        if not schema_path.exists():
-            # Try alternative location
-            schema_path = Path(__file__).parent.parent.parent.parent / "espresso-profile-schema" / "schema.json"
+        # Find schema directory
+        possible_dirs = []
         
-        _validator = ProfileValidator(schema_path=str(schema_path))
+        # 1. Check standard Docker path (where Dockerfile clones it)
+        possible_dirs.append(Path("/app/espresso-profile-schema"))
+        
+        # 2. Check env var
+        env_schema_dir = os.getenv("METICULOUS_SCHEMA_DIR")
+        if env_schema_dir:
+            possible_dirs.insert(0, Path(env_schema_dir))
+
+        # 3. Check relative paths (development/local)
+        server_path = Path(__file__).resolve()
+        # meticulous-mcp/src/meticulous_mcp/server.py -> meticulous-mcp/espresso-profile-schema
+        possible_dirs.append(server_path.parent.parent.parent / "espresso-profile-schema")
+        # meticulous-mcp/src/meticulous_mcp/server.py -> espresso-profile-schema (sibling of repo)
+        possible_dirs.append(server_path.parent.parent.parent.parent / "espresso-profile-schema")
+        
+        found_dir = None
+        for d in possible_dirs:
+            if (d / "schema.json").exists():
+                found_dir = d
+                break
+        
+        # Fallback to Docker path if nothing found (avoids crash before error reporting)
+        if found_dir is None:
+            found_dir = Path("/app/espresso-profile-schema")
+            
+        _schema_path = found_dir / "schema.json"
+        _rfc_path = found_dir / "rfc.md"
+        
+        _validator = ProfileValidator(schema_path=str(_schema_path))
         initialize_tools(_api_client, _validator)
 
 
@@ -98,7 +130,8 @@ def create_profile(input_data: str) -> Dict[str, Any]:
                 ...
               ],
               "variables": [...],  // optional
-              "accent_color": "#FF5733"  // optional
+              "accent_color": "#FF5733",  // optional
+              "image": "data:image/png;base64,..."  // optional base64 data URI or relative URL
             }
     """
     _ensure_initialized()
@@ -153,6 +186,7 @@ def update_profile(update_data: str) -> Dict[str, Any]:
               "name": "New Name",  // optional
               "temperature": 92.0,  // optional
               "final_weight": 40.0,  // optional
+              "image": "data:image/png;base64,...",  // optional base64 data URI or relative URL
               "stages_json": "[...]"  // optional - JSON string of stages array
             }
             
@@ -225,7 +259,139 @@ def run_profile(profile_id: str) -> Dict[str, Any]:
     return run_profile_tool(profile_id)
 
 
+@mcp.tool()
+def select_profile(profile_id: str) -> Dict[str, Any]:
+    """Select a profile on the machine's display.
+
+    Use this when the user wants to set the active profile
+    or verify it on the machine before pulling a shot.
+    """
+    _ensure_initialized()
+    return select_profile_tool(profile_id)
+
+
+@mcp.tool()
+def get_machine_info() -> Dict[str, Any]:
+    """Get machine device info (firmware, serial, name, etc.)."""
+    _ensure_initialized()
+    return get_machine_info_tool()
+
+
+@mcp.tool()
+def get_settings() -> Dict[str, Any]:
+    """Get machine settings (e.g. auto_preheat, sounds)."""
+    _ensure_initialized()
+    return get_settings_tool()
+
+
+@mcp.tool()
+def update_setting(key: str, value: Union[str, int, float, bool]) -> Dict[str, Any]:
+    """Update a machine setting.
+    
+    Args:
+        key: The setting key to update (e.g. 'auto_preheat', 'enable_sounds').
+        value: The new value.
+    """
+    _ensure_initialized()
+    return update_setting_tool(key, value)
+
+
+@mcp.tool()
+def list_shot_history(date: Optional[str] = None) -> Dict[str, Any]:
+    """List available shot history.
+    
+    If date is provided, lists the specific shot files for that date.
+    If no date is provided, lists all dates with available history.
+    
+    Args:
+        date: Date string (YYYY-MM-DD). Optional.
+    """
+    _ensure_initialized()
+    return list_shot_history_tool(date)
+
+
+@mcp.tool()
+def get_shot_url(date: str, filename: str) -> Dict[str, Any]:
+    """Get the download URL for a specific shot log.
+    
+    Args:
+        date: Date string (YYYY-MM-DD).
+        filename: Shot filename (e.g. HH:MM:SS.shot.json.zst).
+    """
+    _ensure_initialized()
+    return get_shot_url_tool(date, filename)
+
+
+@mcp.tool()
+def get_profiling_knowledge(topic: str = "rfc") -> str:
+    """Get expert knowledge on espresso profiling.
+    
+    Args:
+        topic: 'rfc' for the Open Espresso Profile Format RFC, 'guide' for the general profiling guide, 'schema' for the JSON schema, or 'mechanics' for Meticulous hardware axioms.
+    """
+    _ensure_initialized()
+    
+    t_lower = topic.lower()
+    if t_lower == "rfc":
+        return espresso_rfc()
+    elif t_lower == "schema":
+        return espresso_schema()
+    elif t_lower == "mechanics":
+        return meticulous_mechanics()
+    else:
+        return espresso_knowledge()
+
+
 # Register resources
+@mcp.resource("meticulous://mechanics")
+def meticulous_mechanics() -> str:
+    """Get the machine-specific physics, firmware behaviors, and control axioms for the Meticulous machine."""
+    return """# Meticulous Machine Mechanics & Axioms
+
+Machine-specific physics, firmware behaviors, and control axioms for the Meticulous lever espresso machine. This document helps AI agents design profiles that work with the hardware rather than against it.
+
+## 1. Hydraulic Inertia
+
+- **Water Column Momentum:** Water in the chamber has mass and velocity. A fast fill (e.g. 10-16ml/s) creates a moving water column that cannot stop instantly when transitioning to a slower stage. The motor can halt the piston, but the water already in motion carries momentum into the puck.
+- **Overshoot on Transitions:** When transitioning from a high-flow stage to a low-flow or low-pressure stage, inertia will cause the actual flow/pressure to temporarily exceed the new stage's limits or targets. The faster the preceding flow, the larger the overshoot.
+- **Design for Inertia:** Account for momentum when designing transitions. Options include: reducing the preceding stage's flow rate, pressure-matching across the transition, or accepting that the first seconds of the new stage will overshoot its limits.
+- **Hydraulic Compaction:** When a profile requires puck resistance that the dose, basket, beans, or grind (particularly low-fines burr sets) cannot produce on their own, the machine's lever system can deliver fill speeds far beyond what a vibratory pump can achieve (e.g. 10-18ml/s). This fast fill hydraulically compacts the puck, creating resistance mechanically.
+
+## 2. Sensing & Telemetry
+
+- **RAW vs Filtered Values:** The machine maintains two pressure/flow streams. Exit triggers fire on **RAW** sensor values. Telemetry and graphs display **filtered** values which lag behind the RAW readings.
+- **Apparent Mystery Exits:** Because triggers fire on RAW values but graphs show filtered values, a stage exit may appear premature when viewing the graph. The exit was correct — it happened at the RAW threshold, but the filtered line hasn't caught up yet. The trigger can also fire so close to a telemetry frame boundary that the exit appears to occur in the following data frame.
+- **Debug Log as Ground Truth:** The machine's debug log records every stage transition with an explicit named trigger (e.g. `PressureValueTrigger`, `TimerTrigger`, `WeightValueTrigger`, `PistonPositionTrigger`). If a graph-based or telemetry-based analysis disagrees with the debug log, the debug log is correct.
+
+## 3. Trigger & Limit Behavior
+
+- **Exit Triggers Are OR-Gated:** When a stage has multiple exit triggers, whichever fires first wins. There is no AND logic. For example, a stage with both a 25s time trigger and a 3g weight trigger will exit on whichever condition is met first.
+- **Global Weight Exit:** The profile's `final_weight` acts as a global exit trigger that ends the shot regardless of which stage is currently running. Individual stages do not need their own weight exit if the global target handles end-of-shot.
+- **Limits Are Ceilings, Not Floors:** A flow limit of 2.0ml/s means the motor will not *push* faster than 2.0ml/s. It does not guarantee 2.0ml/s will be achieved. If puck resistance drops (e.g. during a pressure decline), flow can fall well below the limit. The limit is a constraint, not a target.
+- **Reinforcing Feedback Loops:** When a flow limit step-down occurs between stages (e.g. 2.5ml/s to 2.0ml/s), the motor throttles back, which reduces pressure, which further reduces flow below the new limit. This creates a temporary reinforcing loop until equilibrium is found. The resulting pressure dip is hydraulic physics, not a control error.
+- **Predictive Weight Triggers:** The firmware maintains a `weight_prediction` value that anticipates final weight accounting for water-in-flight and scale lag. Weight-based exit triggers fire on this predicted value, not the current scale reading, making them the most accurate method for controlling yield.
+- **The `relative` Field:** Every exit trigger has a `relative` field that controls its measurement reference:
+  - `relative: true` = measured from **stage start** (e.g. time = stage duration, weight = gain during this stage, piston_position = travel since stage start)
+  - `relative: false` = measured as **absolute value** (e.g. time = total shot clock, weight = total in cup, pressure = absolute sensor reading)
+  - **Defaults to `false` if omitted**, which is rarely the desired behavior. A time trigger at 5s with `relative: false` fires against the global shot clock, not stage duration. Always set `relative` explicitly on every trigger.
+
+## 4. Stage Transitions
+
+- **Stateless Handoffs:** Stages do not inherit state from the previous stage. Each stage defines its own starting value for pressure, flow, or power.
+- **Pressure-Matched Transitions:** Smooth transitions occur when the exit condition of one stage matches the starting value of the next. For example, if a bloom stage holds 3.0 bar and exits on weight, starting the next ramp at 3.0 bar avoids a pressure discontinuity.
+- **Leading Edge Transitions:** When a stage is actively ramping toward a target, the PID has directional momentum at the moment of exit. Even with a perfect pressure match, this momentum can cause a flow spike (if the next stage is at equal or lower pressure) or a flow dip (if higher). A leading edge strategy mitigates this: the current stage aims slightly past the desired exit, the exit trigger fires at the desired value, and the next stage starts slightly below it. For example, a ramp targeting 9.4 bar with a 9.2 bar exit trigger, followed by a decline starting at 9.0 bar. The next stage's target is in the direction the PID needs to correct toward, producing a smooth handoff.
+
+## 5. Profile Variables
+
+- **Dynamic References:** Stage dynamics points can reference profile variables using the `$` prefix (e.g. `[0, "$infuse_pressure"]`). This makes profiles tunable — users adjust variables without editing stage definitions.
+
+## 6. Profile JSON Requirements
+
+- **Limits Array:** Every stage must include a `limits` array. Use an empty array `[]` if no limits are needed.
+- **Exit Trigger Safety:** Stages should include a time-based or weight-based exit trigger as a fallback. A stage with only a pressure trigger may run indefinitely if the puck never reaches that pressure.
+"""
+
+
 @mcp.resource("espresso://knowledge")
 def espresso_knowledge() -> str:
     """Get comprehensive espresso profiling knowledge for the Meticulous machine."""
@@ -647,14 +813,27 @@ def espresso_schema() -> str:
     """Get the profile schema reference."""
     _ensure_initialized()
     try:
-        schema_path = Path(__file__).parent.parent.parent / "espresso-profile-schema" / "schema.json"
-        if not schema_path.exists():
-            schema_path = Path(__file__).parent.parent.parent.parent / "espresso-profile-schema" / "schema.json"
-        
-        with open(schema_path, "r", encoding="utf-8") as f:
+        if not _schema_path or not _schema_path.exists():
+            return f"Error: Schema file not found at {_schema_path}"
+            
+        with open(_schema_path, "r", encoding="utf-8") as f:
             return json.dumps(json.load(f), indent=2)
     except Exception as e:
         return f"Error loading schema: {e}"
+
+
+@mcp.resource("espresso://rfc")
+def espresso_rfc() -> str:
+    """Get the Open Espresso Profile Format RFC document."""
+    _ensure_initialized()
+    try:
+        if not _rfc_path or not _rfc_path.exists():
+            return f"Error: RFC file not found at {_rfc_path}"
+
+        with open(_rfc_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        return f"Error loading RFC: {e}"
 
 
 @mcp.resource("espresso://profile/{profile_id}")
@@ -713,7 +892,17 @@ Profile Design Principles:
 - Always include safety timeouts to prevent infinite extraction.
 - Avoid exact match triggers - they're unreliable.
 
-Create profiles with structured stages using exit triggers based on flow rate, weight, time, or pressure. Favor flow rate, and pressure over time. Use time in conjunction with other measures or as an or gate if something is taking too long."""
+JSON Formatting Requirements:
+- **Relative Triggers:** You MUST include `"relative": true` (for duration) or `"relative": false` (for absolute values) in every exit trigger.
+- **Limits Array:** You MUST include `"limits": []` (empty array) in every stage if no limits are needed.
+
+Create profiles with structured stages using exit triggers based on flow rate, weight, time, or pressure. Favor flow rate, and pressure over time. Use time in conjunction with other measures or as an or gate if something is taking too long.
+
+Image Handling:
+- If the user requests an image or icon for the profile, use your image generation capabilities to create one.
+- Format: Square aspect ratio (e.g., 512x512).
+- Encoding: Convert the image to a base64 Data URI string (e.g., "data:image/png;base64,...").
+- Pass this string in the 'image' field of the profile creation data."""
     
     messages.append({
         "role": "system",
@@ -810,7 +999,16 @@ Common Issues & Solutions:
 - Primary: Grind coarser
 - Profile fix: Add bloom phase or increase initial infusion pressure
 
-Modify profiles incrementally - adjust one parameter at a time to understand its effect."""
+Modify profiles incrementally - adjust one parameter at a time to understand its effect.
+
+JSON Formatting Requirements:
+- **Relative Triggers:** Ensure every exit trigger has `"relative": true` (duration) or `"relative": false` (absolute).
+- **Limits Array:** Ensure every stage has a `"limits"` array (use `[]` if empty).
+
+Image Updates:
+- If asked to update the profile icon/image, generate a new one (512x512 square).
+- Convert to base64 Data URI string ("data:image/png;base64,...").
+- Pass in the 'image' field."""
     
     messages.append({
         "role": "system",
@@ -875,12 +1073,23 @@ def troubleshoot_profile(
     
     system_context = """You are an expert espresso troubleshooting specialist for the Meticulous machine.
 
-Use the troubleshooting guide to diagnose and fix profile issues:
+**Operational Mandate: Fetch then Analyze**
+To diagnose issues effectively, you must follow this workflow:
+1.  **Locate Shot:** Use `list_shot_history(date=...)` to find the relevant shot file.
+2.  **Get URL:** Use `get_shot_url(date=..., filename=...)` to get the direct download link.
+3.  **Download & Analyze:** Use `curl` or similar to download the JSON from the URL to a local file. Use any locally written scripts to extract and analyze key metrics (flow stability, pressure limits, temperature stability). If no script currently exists, create it. Refine the script as necessary to address the user's inquiries and observations.
+4.  **Diagnose:** Combine your analysis with the user's reported symptom.
+
+**Forensic Analysis Mandate**:
+- You MUST cross-reference your findings with **`meticulous://mechanics`** (or call `get_profiling_knowledge(topic='mechanics')`) to validate your diagnosis against hardware axioms (e.g., hydraulic inertia, RAW vs filtered sensing, predictive weight triggers, limit feedback loops).
+- Look for non-obvious mechanical causes (e.g., a stage exit that appears premature may be correct on RAW values while the filtered graph lags behind).
+
+**Troubleshooting Guide**:
 
 **Diagnosis Process**:
 1. Identify the taste/texture symptom
 2. Determine if it's under-extraction, over-extraction, or flow issue
-3. Check shot parameters (duration, yield, pressure curve)
+3. Check shot parameters (duration, yield, pressure curve) from the fetched data
 4. Apply targeted fixes based on the issue category
 
 **Key Principles**:
@@ -894,8 +1103,8 @@ Use the troubleshooting guide to diagnose and fix profile issues:
 If you encounter HTTP connection errors (e.g., "Failed to resolve", "Max retries exceeded", "Connection refused") when calling tools, this is NOT a profile issue. Instead:
 1. Check if the Meticulous machine is powered on and booted up
 2. Verify network connectivity between your computer and the machine
-3. Check if the hostname is correct (default: meticulousmodelalmondmilklatte.local)
-4. Test connection by accessing http://your-machine-name.local in a browser
+3. Check if the METICULOUS_API_URL environment variable is set correctly
+4. Test connection by accessing your machine's URL in a browser
 5. Verify firewall settings aren't blocking connections
 
 Do NOT attempt to troubleshoot profile parameters if you're getting connection errors - the issue is with the machine connection, not the profile."""
@@ -920,7 +1129,7 @@ Do NOT attempt to troubleshoot profile parameters if you're getting connection e
         prompt_parts.append(f"(yield: {yield_weight}g)")
     
     prompt_text = " ".join(prompt_parts) + "."
-    prompt_text += "\n\nAnalyze the issue and recommend specific profile modifications."
+    prompt_text += "\n\nRetrieve the relevant shot data and analyze it to recommend modifications."
     
     messages.append({
         "role": "user",

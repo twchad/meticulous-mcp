@@ -227,7 +227,11 @@ def profile_to_dict(profile: Profile, normalize: bool = True) -> Dict[str, Any]:
                         # Ensure relative is always present (default to False if None/missing)
                         # The machine expects relative to always be present
                         if "relative" not in trigger or trigger.get("relative") is None:
-                            trigger["relative"] = False
+                            # Default relative to True for time triggers (stage duration), False for others (absolute value)
+                            if trigger.get("type") == "time":
+                                trigger["relative"] = True
+                            else:
+                                trigger["relative"] = False
     
     return profile_dict
 
@@ -276,7 +280,11 @@ def normalize_profile(profile: Profile) -> Profile:
             for trigger in stage_dict['exit_triggers']:
                 # Ensure relative is always present (default to False if None/missing)
                 if 'relative' not in trigger or trigger.get('relative') is None:
-                    trigger['relative'] = False
+                    # Default relative to True for time triggers (stage duration), False for others (absolute value)
+                    if trigger.get('type') == 'time':
+                        trigger['relative'] = True
+                    else:
+                        trigger['relative'] = False
                     stage_normalized = True
         
         if stage_normalized:

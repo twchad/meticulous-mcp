@@ -87,6 +87,9 @@ class ProfileCreateInput(BaseModel):
     accent_color: Optional[str] = Field(
         default=None, description="Optional accent color in hex format (e.g., '#FF5733')"
     )
+    image: Optional[str] = Field(
+        default=None, description="Optional base64 image data URI or relative URL"
+    )
 
 
 class ProfileUpdateInput(BaseModel):
@@ -96,6 +99,7 @@ class ProfileUpdateInput(BaseModel):
     name: Optional[str] = Field(default=None, description="New profile name")
     temperature: Optional[float] = Field(default=None, description="New temperature")
     final_weight: Optional[float] = Field(default=None, description="New final weight")
+    image: Optional[str] = Field(default=None, description="New base64 image data URI or relative URL")
     # Accept stages as either a list of dicts or a JSON string
     stages: Optional[List[Dict[str, Any]]] = Field(
         default=None, description="Optional list of stage dictionaries (full replacement)"
@@ -263,10 +267,13 @@ def create_profile_tool(input_data: ProfileCreateInput) -> Dict[str, Any]:
             variables=variables,
         )
         
-        # Add display if accent_color provided
-        if input_data.accent_color:
+        # Add display if accent_color or image provided
+        if input_data.accent_color or input_data.image:
             from meticulous.profile import Display
-            profile.display = Display(accentColor=input_data.accent_color)
+            profile.display = Display(
+                accentColor=input_data.accent_color,
+                image=input_data.image
+            )
         
         # Lint profile BEFORE normalization to catch issues that will be auto-fixed
         # This helps agents understand what normalization will happen
@@ -400,6 +407,12 @@ def update_profile_tool(input_data: ProfileUpdateInput) -> Dict[str, Any]:
         existing.temperature = input_data.temperature
     if input_data.final_weight is not None:
         existing.final_weight = input_data.final_weight
+    if input_data.image is not None:
+        from meticulous.profile import Display
+        if existing.display is None:
+            existing.display = Display(image=input_data.image)
+        else:
+            existing.display.image = input_data.image
     
     # Update stages if provided (accept either 'stages' list or 'stages_json' string)
     stages_to_process = None
@@ -438,12 +451,16 @@ def update_profile_tool(input_data: ProfileUpdateInput) -> Dict[str, Any]:
                 # Ensure exit_triggers is a list
                 if "exit_triggers" not in stage_dict:
                     stage_dict["exit_triggers"] = []
-                
+
                 # Normalize exit_triggers - ensure relative is always present
                 for trigger in stage_dict["exit_triggers"]:
                     if "relative" not in trigger or trigger.get("relative") is None:
-                        trigger["relative"] = False
-                
+                        # Default relative to True for time triggers (stage duration), False for others (absolute value)
+                        if trigger.get("type") == "time":
+                            trigger["relative"] = True
+                        else:
+                            trigger["relative"] = False
+
                 # Ensure limits is always present as an array (empty if None/missing)
                 # The machine expects limits to always be an array, not None or missing
                 if "limits" not in stage_dict or stage_dict.get("limits") is None:
@@ -831,3 +848,143 @@ def run_profile_tool(profile_id: str) -> Dict[str, Any]:
         "status": action_result.status,
     }
 
+
+def select_profile_tool(profile_id: str) -> Dict[str, Any]:
+    """Select a profile on the machine without starting it.
+
+    Sets the active profile on the machine's display so the user
+    can verify it and manually start the shot.
+
+    Args:
+        profile_id: Profile ID to select
+
+    Returns:
+        Dictionary with success message
+    """
+    _ensure_initialized()
+
+    _api_client.select_profile(profile_id)
+
+    return {
+        "profile_id": profile_id,
+        "message": f"Profile '{profile_id}' selected on machine. Ready to start manually."
+    }
+
+def list_shot_history_tool(date: Optional[str] = None) -> Dict[str, Any]:
+    """List available shot history (dates or files).
+    
+    Args:
+        date: Optional date string (YYYY-MM-DD). If provided, lists files for that date.
+              If not provided, lists available dates.
+    
+    Returns:
+        Dictionary containing list of dates or files.
+    """
+    _ensure_initialized()
+    
+    if date:
+        result = _api_client.get_shot_files(date)
+        if isinstance(result, APIError):
+            error_msg = result.error or result.status or "Unknown error"
+            raise Exception(f"Failed to list shot files for {date}: {error_msg}")
+        return {"files": [f.name for f in result]}
+    
+    result = _api_client.get_history_dates()
+    if isinstance(result, APIError):
+         error_msg = result.error or result.status or "Unknown error"
+         raise Exception(f"Failed to list history: {error_msg}")
+         
+    return {"dates": [d.name for d in result]}
+
+def get_shot_url_tool(date: str, filename: str) -> Dict[str, str]:
+    """Get the download URL for a specific shot.
+    
+    Args:
+        date: Date string (YYYY-MM-DD).
+        filename: Shot filename (e.g. HH:MM:SS.shot.json.zst).
+        
+    Returns:
+        Dictionary containing the URL.
+    """
+    _ensure_initialized()
+    
+    url = _api_client.get_shot_url(date, filename)
+    return {"url": url}
+
+
+def get_machine_info_tool() -> Dict[str, Any]:
+    """Get machine device info (firmware, serial, name, etc.).
+
+    Returns:
+        Dictionary with device details.
+    """
+    _ensure_initialized()
+
+    result = _api_client.get_machine_info()
+    if isinstance(result, APIError):
+        error_msg = result.error or result.status or "Unknown error"
+        raise Exception(f"Failed to get machine info: {error_msg}")
+
+    if hasattr(result, "model_dump"):
+        return result.model_dump()
+
+    return result
+
+
+def get_settings_tool() -> Dict[str, Any]:
+    """Get the current settings of the Meticulous machine.
+    
+    Returns:
+        Dictionary containing settings (auto_preheat, sounds, etc).
+    """
+    _ensure_initialized()
+    
+    try:
+        result = _api_client.get_settings()
+        if isinstance(result, APIError):
+            error_msg = result.error or result.status or "Unknown error"
+            raise Exception(f"Failed to get settings: {error_msg}")
+        
+        # If it's a Pydantic model, dump it to dict
+        if hasattr(result, "model_dump"):
+            return result.model_dump()
+            
+        return result
+    except Exception as e:
+        # Fallback: if validation failed in the client wrapper, try to get raw settings
+        # This handles cases where the machine firmware has new/different fields than the SDK expects
+        try:
+            # We access the internal API session directly to bypass strict validation
+            if hasattr(_api_client, "_api") and hasattr(_api_client._api, "session") and hasattr(_api_client._api, "base_url"):
+                response = _api_client._api.session.get(f"{_api_client._api.base_url}/api/v1/settings")
+                if response.status_code == 200:
+                    return response.json()
+        except Exception:
+            pass # Fallback failed, raise original error
+            
+        raise Exception(f"Failed to get settings: {e}")
+
+
+def update_setting_tool(key: str, value: Any) -> Dict[str, Any]:
+    """Update a specific setting on the Meticulous machine.
+    
+    Args:
+        key: The setting key to update (e.g., 'auto_preheat').
+        value: The new value for the setting.
+        
+    Returns:
+        Dictionary confirming the update.
+    """
+    _ensure_initialized()
+    
+    result = _api_client.update_setting(key, value)
+    if isinstance(result, APIError):
+        error_msg = result.error or result.status or "Unknown error"
+        raise Exception(f"Failed to update setting '{key}': {error_msg}")
+    
+    return {
+        "message": f"Setting '{key}' updated successfully",
+        "key": key,
+        "value": value,
+        "settings": result
+    }
