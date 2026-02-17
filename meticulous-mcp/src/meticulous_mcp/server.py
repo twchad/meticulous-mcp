@@ -385,7 +385,15 @@ Machine-specific physics, firmware behaviors, and control axioms for the Meticul
 
 - **Dynamic References:** Stage dynamics points can reference profile variables using the `$` prefix (e.g. `[0, "$infuse_pressure"]`). This makes profiles tunable — users adjust variables without editing stage definitions.
 
-## 6. Profile JSON Requirements
+## 6. Piston Travel & Seal Break
+
+- **Maximum Travel:** The piston has a physical maximum travel of ~75mm (usable range ~73mm). Beyond this, the piston bottoms out against the end of the cylinder.
+- **Piston Reversal:** During a shot, the piston only advances forward. A reversal indicates a high probability that the puck has unseated from the basket wall. The higher the pressure at the time of reversal, the more likely the seal has broken.
+- **Failure Cascade:** When the piston bottoms out and the puck unseats: (1) motor speed goes negative (earliest signal), (2) piston position begins decreasing, (3) motor power ramps rapidly toward 100% as the controller fights the reversal, (4) pressure collapses along a characteristic depressurization curve, (5) flow drops to zero.
+- **Telemetry Signature (in order of appearance):** Negative motor speed → piston position decrease → motor power ramp to 100% → pressure decay below setpoint → flow drops to zero. The speed signal fires before the position change is large enough to measure reliably, making it the earliest detector.
+- **Root Cause:** The piston exhausted its available travel. This can result from grind being too coarse for the profile (low puck resistance → excessive fill volume), a profile that allocates too much piston travel to early stages, or a combination of both. Compare piston travel per stage between good and failed shots to isolate the cause.
+
+## 7. Profile JSON Requirements
 
 - **Limits Array:** Every stage must include a `limits` array. Use an empty array `[]` if no limits are needed.
 - **Exit Trigger Safety:** Stages should include a time-based or weight-based exit trigger as a fallback. A stage with only a pressure trigger may run indefinitely if the puck never reaches that pressure.
@@ -1098,6 +1106,9 @@ To diagnose issues effectively, you must follow this workflow:
 - Consider grind size first (if gushing/choking)
 - Then adjust profile parameters
 - Finally adjust temperature if needed
+
+**Piston Reversal / Seal Break Failure**:
+If shot data shows piston position reaching ≥ ~74.5mm followed by a position decrease (reversal), with motor power at 100% but pressure collapsing and flow dropping to zero, the piston likely bottomed out and the puck unseated. The higher the pressure at the time of reversal, the stronger the indication of seal break. When confirmed, this is a catastrophic shot failure — pressure collapses along a depressurization curve and no extraction is possible. The piston exhausted its available travel, which can result from grind being too coarse for the profile, a profile that allocates too much travel to early stages, or both. Compare piston travel per stage between good and failed shots to isolate the cause.
 
 **Important: HTTP Connection Errors**:
 If you encounter HTTP connection errors (e.g., "Failed to resolve", "Max retries exceeded", "Connection refused") when calling tools, this is NOT a profile issue. Instead:
